@@ -1,0 +1,27 @@
+version: '3.8'
+
+services:
+  api:
+    build: .
+    ports:
+      - "8080:8080"
+    depends_on:
+      - db
+    environment:
+      - GIN_MODE=release
+    volumes:
+      - ./data-contracts:/data-contracts
+
+  db:
+    image: ghusta/postgres-world-db:2.12
+    # environment:
+    #   POSTGRES_USER: world
+    #   POSTGRES_PASSWORD: world123
+    #   POSTGRES_DB: world-db
+    ports:
+      - "5432:5432"
+    # volumes:
+    #   - postgres_data:/var/lib/postgresql/data
+
+# volumes:
+#   postgres_data:
