@@ -11,7 +11,7 @@ A REST API built with Go and Gin framework, featuring contract-based execution a
 ## Project Structure
 
 ```text
-golang-gin-api/
+axis/
 ├── src/
 │   ├── controllers/
 │   ├── models/
@@ -30,13 +30,14 @@ golang-gin-api/
 
 ```bash
 git clone <repository-url>
-cd golang-gin-api
+cd axis
 ```
 
 2. Install dependencies:
 
 ```bash
 go mod download
+go mod tidy
 ```
 
 3. Run PostgreSQL (choose one option):

@@ -1,0 +1,23 @@
+{
+  "id": "1",
+  "name": "Contract 1",
+  "description": "This is contract 1",
+  "connector": {
+    "id": "1",
+    "name": "Connector 1",
+    "description": "This is connector 1",
+    "type": "postgres",
+    "connectionString": "postgres://world:world123@localhost:5432/world-db?sslmode=disable",
+    "SQLQuery": "SELECT code, name, continent FROM public.country limit 10;"
+  },
+  "responseTemplate": {
+    "id": "2",
+    "name": "Response Template 1",
+    "description": "This is response template 1",
+    "template": {
+      "code": "{{.code}}",
+      "name": "{{.name}}",
+      "continent": "{{.continent}}"
+    }
+  }
+}
