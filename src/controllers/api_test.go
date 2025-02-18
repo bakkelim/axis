@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"golang-gin-api/src/models"
+	"axis/src/models"
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"

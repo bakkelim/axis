@@ -6,7 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/gin-gonic/gin"
-	"golang-gin-api/src/models"
+	"axis/src/models"
 	"html/template"
 	"net/http"
 	"os"

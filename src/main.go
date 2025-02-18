@@ -1,7 +1,7 @@
 package main
 
 import (
-	"golang-gin-api/src/routes"
+	"axis/src/routes"
 	"os"
 
 	"github.com/gin-gonic/gin"

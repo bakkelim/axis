@@ -2,7 +2,7 @@ package routes
 
 import (
 	"github.com/gin-gonic/gin"
-	"golang-gin-api/src/controllers"
+	"axis/src/controllers"
 )
 
 func SetupRoutes(router *gin.Engine) {

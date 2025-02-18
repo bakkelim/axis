@@ -1,4 +1,4 @@
-module golang-gin-api
+module axis
 
 go 1.18
 
