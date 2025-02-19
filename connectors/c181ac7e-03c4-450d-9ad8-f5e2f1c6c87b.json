@@ -1,0 +1,8 @@
+{
+    "id": "c181ac7e-03c4-450d-9ad8-f5e2f1c6c87b",
+    "name": "Connector 1",
+    "description": "This is connector 1",
+    "type": "postgres",
+    "connectionString": "postgres://world:world123@localhost:5432/world-db?sslmode=disable",
+    "SQLQuery": "SELECT code, name, continent FROM public.country limit 10;"
+}
