@@ -2,47 +2,119 @@ package controllers
 
 import (
 	"axis/src/models"
-	"bytes"
-	"database/sql"
 	"encoding/json"
 	"fmt"
-	"html/template"
 	"net/http"
 	"os"
 	"path/filepath"
-	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
+
+	"bytes"
+	"database/sql"
+	"html/template"
+	"time"
 
 	_ "github.com/lib/pq"
 )
+
+// CreateContract creates a new contract
+func CreateContract(c *gin.Context) {
+	var contract models.Contract
+	if err := c.ShouldBindJSON(&contract); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	contract.ID = uuid.New().String()
+
+	if err := saveContract(&contract); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save contract"})
+		return
+	}
+
+	c.JSON(http.StatusCreated, contract)
+}
+
+// ListContracts returns all contracts
+func ListContracts(c *gin.Context) {
+	contracts, err := listContracts()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to list contracts"})
+		return
+	}
+
+	c.JSON(http.StatusOK, contracts)
+}
 
 // GetContractByID retrieves a contract by its ID
 func GetContractByID(c *gin.Context) {
 	id := c.Param("id")
 
-	// Read the contract file
-	filePath := filepath.Join("../data-contracts", fmt.Sprintf("contract-%s.json", id))
-	contractData, err := os.ReadFile(filePath)
+	contract, err := loadContract(id)
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Contract not found"})
-		return
-	}
-
-	var contract models.Contract
-	if err := json.Unmarshal(contractData, &contract); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Error parsing contract data"})
+		if err.Error() == "contract not found" {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Contract not found"})
+		} else {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load contract"})
+		}
 		return
 	}
 
 	c.JSON(http.StatusOK, contract)
 }
 
+// UpdateContract updates an existing contract
+func UpdateContract(c *gin.Context) {
+	id := c.Param("id")
+
+	// Check if contract exists
+	if _, err := loadContract(id); err != nil {
+		if err.Error() == "contract not found" {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Contract not found"})
+		} else {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load contract"})
+		}
+		return
+	}
+
+	var contract models.Contract
+	if err := c.ShouldBindJSON(&contract); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	contract.ID = id
+	if err := saveContract(&contract); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update contract"})
+		return
+	}
+
+	c.JSON(http.StatusOK, contract)
+}
+
+// DeleteContract removes a contract
+func DeleteContract(c *gin.Context) {
+	id := c.Param("id")
+
+	if err := deleteContract(id); err != nil {
+		if err.Error() == "contract not found" {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Contract not found"})
+		} else {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete contract"})
+		}
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Contract deleted successfully"})
+}
+
 func ExecuteContract(c *gin.Context) {
 	id := c.Param("id")
 
 	// 1. Read the contract file
-	contractPath := filepath.Join("../data-contracts", fmt.Sprintf("contract-%s.json", id))
+	contractPath := filepath.Join(contractsDir, id+".json")
 	contractData, err := os.ReadFile(contractPath)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Contract not found"})
