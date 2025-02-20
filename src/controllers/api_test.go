@@ -15,24 +15,35 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func setupTestEnvironment(t *testing.T) (string, string, string) {
+func setupTestEnvironment(t *testing.T) (string, string, string, string) {
 	baseDir := t.TempDir()
 	dataContractsDir := filepath.Join(baseDir, "data-contracts")
+	connectorsDir := filepath.Join(baseDir, "connectors")
 	controllersDir := filepath.Join(baseDir, "controllers")
 
 	require.NoError(t, os.MkdirAll(dataContractsDir, os.ModePerm))
+	require.NoError(t, os.MkdirAll(connectorsDir, os.ModePerm))
 	require.NoError(t, os.MkdirAll(controllersDir, os.ModePerm))
 
-	return baseDir, dataContractsDir, controllersDir
+	return baseDir, dataContractsDir, connectorsDir, controllersDir
 }
 
 func TestGetContractByID_Success(t *testing.T) {
-	_, dataContractsDir, controllersDir := setupTestEnvironment(t)
+	_, dataContractsDir, _, controllersDir := setupTestEnvironment(t)
 
 	// Create sample contract
 	contract := models.Contract{
 		ID:   "123",
 		Name: "Test Contract",
+		Query: models.DatabaseQuery{
+			ConnectorID: "conn-123",
+			SQLQuery:    "SELECT 1",
+		},
+		ResponseTemplate: models.ResponseTemplate{
+			Template: map[string]interface{}{
+				"result": "{{.result}}",
+			},
+		},
 	}
 	contractBytes, err := json.Marshal(contract)
 	require.NoError(t, err)
@@ -62,18 +73,33 @@ func TestGetContractByID_Success(t *testing.T) {
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &response))
 	assert.Equal(t, contract.ID, response.ID)
 	assert.Equal(t, contract.Name, response.Name)
+	assert.Equal(t, contract.Query.ConnectorID, response.Query.ConnectorID)
+	assert.Equal(t, contract.Query.SQLQuery, response.Query.SQLQuery)
 }
 
 func TestExecuteContract_DBConnectionFailed(t *testing.T) {
-	_, dataContractsDir, controllersDir := setupTestEnvironment(t)
+	_, dataContractsDir, connectorsDir, controllersDir := setupTestEnvironment(t)
 
-	// Create sample contract with invalid DB connector
+	// Create sample connector
+	connector := models.Connector{
+		ID:               "conn-456",
+		Type:             "invalid",
+		ConnectionString: "",
+	}
+	connectorBytes, err := json.Marshal(connector)
+	require.NoError(t, err)
+
+	// Write connector file
+	connectorPath := filepath.Join(connectorsDir, "conn-456.json")
+	require.NoError(t, os.WriteFile(connectorPath, connectorBytes, 0644))
+
+	// Create sample contract
 	contract := models.Contract{
-		ID: "456",
-		Connector: models.Connector{
-			Type:             "invalid",
-			ConnectionString: "",
-			SQLQuery:         "SELECT 1",
+		ID:   "456",
+		Name: "Test Contract",
+		Query: models.DatabaseQuery{
+			ConnectorID: "conn-456",
+			SQLQuery:    "SELECT 1",
 		},
 		ResponseTemplate: models.ResponseTemplate{
 			Template: map[string]interface{}{

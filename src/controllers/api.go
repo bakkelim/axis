@@ -1,17 +1,18 @@
 package controllers
 
 import (
+	"axis/src/models"
 	"bytes"
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"github.com/gin-gonic/gin"
-	"axis/src/models"
 	"html/template"
 	"net/http"
 	"os"
 	"path/filepath"
 	"time"
+
+	"github.com/gin-gonic/gin"
 
 	_ "github.com/lib/pq"
 )
@@ -54,8 +55,21 @@ func ExecuteContract(c *gin.Context) {
 		return
 	}
 
-	// 2. Execute the SQL query
-	connector := contract.Connector
+	// 2. Load the connector
+	connectorPath := filepath.Join("../connectors", fmt.Sprintf("%s.json", contract.Query.ConnectorID))
+	connectorData, err := os.ReadFile(connectorPath)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Connector not found"})
+		return
+	}
+
+	var connector models.Connector
+	if err := json.Unmarshal(connectorData, &connector); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Error parsing connector data"})
+		return
+	}
+
+	// 3. Execute the SQL query
 	db, err := sql.Open(connector.Type, connector.ConnectionString)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database connection failed"})
@@ -63,7 +77,7 @@ func ExecuteContract(c *gin.Context) {
 	}
 	defer db.Close()
 
-	rows, err := db.Query(connector.SQLQuery)
+	rows, err := db.Query(contract.Query.SQLQuery)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Query execution failed"})
 		return
