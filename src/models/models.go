@@ -18,10 +18,43 @@ type Connector struct {
 	Config      DatabaseConfig `json:"config"`
 }
 
+// FilterOperator represents the type of filter operation
+type FilterOperator string
+
+const (
+	OperatorEquals    FilterOperator = "eq"
+	OperatorNotEquals FilterOperator = "neq"
+	OperatorGreater   FilterOperator = "gt"
+	OperatorLess      FilterOperator = "lt"
+	OperatorLike      FilterOperator = "like"
+	OperatorIn        FilterOperator = "in"
+)
+
+// FilterCondition represents a single filter condition
+type FilterCondition struct {
+	Field    string         `json:"field"`    // Column name to filter on
+	Operator FilterOperator `json:"operator"` // Filter operation to apply
+	Value    interface{}    `json:"value"`    // Value to compare against
+}
+
+// PaginationOptions represents pagination parameters
+type PaginationOptions struct {
+	Page     int `json:"page"`     // Page number (1-based)
+	PageSize int `json:"pageSize"` // Number of items per page
+}
+
 // DatabaseQuery represents the query configuration
 type DatabaseQuery struct {
-	ConnectorID string `json:"connectorId"`
-	SQLQuery    string `json:"sqlQuery"`
+	ConnectorID string             `json:"connectorId"`
+	SQLQuery    string             `json:"sqlQuery"`
+	Filters     []FilterCondition  `json:"filters,omitempty"`
+	Pagination  *PaginationOptions `json:"pagination,omitempty"`
+}
+
+// ExecuteContractRequest represents the request body for contract execution
+type ExecuteContractRequest struct {
+	Filters    []FilterCondition  `json:"filters,omitempty"`
+	Pagination *PaginationOptions `json:"pagination,omitempty"`
 }
 
 // AnonymizationRule defines how a field should be anonymized

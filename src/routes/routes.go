@@ -12,12 +12,12 @@ func SetupRoutes(router *gin.Engine) {
 		// Contract routes
 		contracts := api.Group("/contracts")
 		{
-			contracts.POST("", controllers.CreateContract)             // Create a new contract
-			contracts.GET("", controllers.ListContracts)               // List all contracts
-			contracts.GET("/:id", controllers.GetContractByID)         // Get a specific contract
-			contracts.PUT("/:id", controllers.UpdateContract)          // Update a contract
-			contracts.DELETE("/:id", controllers.DeleteContract)       // Delete a contract
-			contracts.GET("/:id/execute", controllers.ExecuteContract) // Execute a contract
+			contracts.POST("", controllers.CreateContract)              // Create a new contract
+			contracts.GET("", controllers.ListContracts)                // List all contracts
+			contracts.GET("/:id", controllers.GetContractByID)          // Get a specific contract
+			contracts.PUT("/:id", controllers.UpdateContract)           // Update a contract
+			contracts.DELETE("/:id", controllers.DeleteContract)        // Delete a contract
+			contracts.POST("/:id/execute", controllers.ExecuteContract) // Changed from GET to POST
 		}
 
 		// Connector routes

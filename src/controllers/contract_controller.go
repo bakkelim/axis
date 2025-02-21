@@ -115,18 +115,30 @@ func DeleteContract(c *gin.Context) {
 func ExecuteContract(c *gin.Context) {
 	id := c.Param("id")
 
-	// 1. Read the contract file
-	contractPath := filepath.Join(contractsDir, id+".json")
-	contractData, err := os.ReadFile(contractPath)
-	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Contract not found"})
+	// Parse request body
+	var req models.ExecuteContractRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request body"})
 		return
 	}
 
-	var contract models.Contract
-	if err := json.Unmarshal(contractData, &contract); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Error parsing contract data"})
+	// Load contract
+	contract, err := loadContract(id)
+	if err != nil {
+		if err.Error() == "contract not found" {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Contract not found"})
+		} else {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load contract"})
+		}
 		return
+	}
+
+	// Apply filters and pagination from request if provided
+	if req.Filters != nil {
+		contract.Query.Filters = req.Filters
+	}
+	if req.Pagination != nil {
+		contract.Query.Pagination = req.Pagination
 	}
 
 	// 2. Load the connector
@@ -151,7 +163,17 @@ func ExecuteContract(c *gin.Context) {
 	}
 	defer db.Close()
 
-	rows, err := db.Query(contract.Query.SQLQuery)
+	baseQuery := contract.Query.SQLQuery
+	whereClause, values := buildWhereClause(contract.Query.Filters)
+	query := baseQuery + whereClause
+
+	if contract.Query.Pagination != nil {
+		offset := (contract.Query.Pagination.Page - 1) * contract.Query.Pagination.PageSize
+		query += fmt.Sprintf(" LIMIT %d OFFSET %d",
+			contract.Query.Pagination.PageSize, offset)
+	}
+
+	rows, err := db.Query(query, values...)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Query execution failed"})
 		return
@@ -278,4 +300,43 @@ func buildConnectionString(config models.DatabaseConfig, connectorType string) s
 	default:
 		return ""
 	}
+}
+
+func buildWhereClause(filters []models.FilterCondition) (string, []interface{}) {
+	if len(filters) == 0 {
+		return "", nil
+	}
+
+	var conditions []string
+	var values []interface{}
+	paramCount := 1
+
+	for _, filter := range filters {
+		switch filter.Operator {
+		case models.OperatorEquals:
+			conditions = append(conditions, fmt.Sprintf("%s = $%d", filter.Field, paramCount))
+		case models.OperatorNotEquals:
+			conditions = append(conditions, fmt.Sprintf("%s != $%d", filter.Field, paramCount))
+		case models.OperatorGreater:
+			conditions = append(conditions, fmt.Sprintf("%s > $%d", filter.Field, paramCount))
+		case models.OperatorLess:
+			conditions = append(conditions, fmt.Sprintf("%s < $%d", filter.Field, paramCount))
+		case models.OperatorLike:
+			conditions = append(conditions, fmt.Sprintf("%s LIKE $%d", filter.Field, paramCount))
+		case models.OperatorIn:
+			if values, ok := filter.Value.([]interface{}); ok {
+				placeholders := make([]string, len(values))
+				for i := range values {
+					placeholders[i] = fmt.Sprintf("$%d", paramCount+i)
+				}
+				conditions = append(conditions, fmt.Sprintf("%s IN (%s)",
+					filter.Field, strings.Join(placeholders, ",")))
+				paramCount += len(values) - 1
+			}
+		}
+		values = append(values, filter.Value)
+		paramCount++
+	}
+
+	return " WHERE " + strings.Join(conditions, " AND "), values
 }

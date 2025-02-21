@@ -336,3 +336,116 @@ func saveTestContract(t *testing.T, dir string, contract *models.Contract) {
 		t.Fatal(err)
 	}
 }
+
+func TestBuildWhereClause(t *testing.T) {
+	tests := []struct {
+		name           string
+		filters        []models.FilterCondition
+		expectedWhere  string
+		expectedValues []interface{}
+	}{
+		{
+			name:           "No filters",
+			filters:        []models.FilterCondition{},
+			expectedWhere:  "",
+			expectedValues: nil,
+		},
+		{
+			name: "Single equals filter",
+			filters: []models.FilterCondition{
+				{
+					Field:    "name",
+					Operator: models.OperatorEquals,
+					Value:    "John",
+				},
+			},
+			expectedWhere:  " WHERE name = $1",
+			expectedValues: []interface{}{"John"},
+		},
+		{
+			name: "Multiple filters",
+			filters: []models.FilterCondition{
+				{
+					Field:    "age",
+					Operator: models.OperatorGreater,
+					Value:    18,
+				},
+				{
+					Field:    "active",
+					Operator: models.OperatorEquals,
+					Value:    true,
+				},
+			},
+			expectedWhere:  " WHERE age > $1 AND active = $2",
+			expectedValues: []interface{}{18, true},
+		},
+		{
+			name: "LIKE operator",
+			filters: []models.FilterCondition{
+				{
+					Field:    "email",
+					Operator: models.OperatorLike,
+					Value:    "%@example.com",
+				},
+			},
+			expectedWhere:  " WHERE email LIKE $1",
+			expectedValues: []interface{}{"%@example.com"},
+		},
+		{
+			name: "IN operator",
+			filters: []models.FilterCondition{
+				{
+					Field:    "status",
+					Operator: models.OperatorIn,
+					Value:    []interface{}{"active", "pending"},
+				},
+			},
+			expectedWhere:  " WHERE status IN ($1,$2)",
+			expectedValues: []interface{}{"active", "pending"},
+		},
+		{
+			name: "Complex mixed filters",
+			filters: []models.FilterCondition{
+				{
+					Field:    "age",
+					Operator: models.OperatorGreater,
+					Value:    18,
+				},
+				{
+					Field:    "name",
+					Operator: models.OperatorLike,
+					Value:    "John%",
+				},
+				{
+					Field:    "status",
+					Operator: models.OperatorIn,
+					Value:    []interface{}{"active", "pending"},
+				},
+			},
+			expectedWhere:  " WHERE age > $1 AND name LIKE $2 AND status IN ($3,$4)",
+			expectedValues: []interface{}{18, "John%", "active", "pending"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			where, values := buildWhereClause(tt.filters)
+			assert.Equal(t, tt.expectedWhere, where)
+			assert.Equal(t, tt.expectedValues, values)
+		})
+	}
+}
+
+func TestBuildWhereClause_InvalidIN(t *testing.T) {
+	filters := []models.FilterCondition{
+		{
+			Field:    "status",
+			Operator: models.OperatorIn,
+			Value:    "not-an-array", // Invalid value for IN operator
+		},
+	}
+
+	where, values := buildWhereClause(filters)
+	assert.Equal(t, " WHERE ", where)
+	assert.Equal(t, []interface{}{"not-an-array"}, values)
+}
