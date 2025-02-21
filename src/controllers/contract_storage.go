@@ -47,10 +47,10 @@ func loadContract(id string) (*models.Contract, error) {
 func listContracts() ([]models.Contract, error) {
 	files, err := os.ReadDir(contractsDir)
 	if err != nil {
-		return nil, err
+		return []models.Contract{}, err
 	}
 
-	var contracts []models.Contract
+	var contracts = []models.Contract{}
 	for _, file := range files {
 		if filepath.Ext(file.Name()) != ".json" {
 			continue
