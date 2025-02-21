@@ -2,15 +2,28 @@ services:
   api:
     build: .
     ports:
-      - "8090:8080"
+      - "8080:8080"
     depends_on:
       - db
     environment:
       - GIN_MODE=release
     volumes:
       - ./data-contracts:/data-contracts
+      - ./connectors:/connectors
 
   db:
     image: ghusta/postgres-world-db:2.12
     ports:
       - "5432:5432"
+
+  nextjs:
+    build:
+      context: ../axis-ui
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=development
+      - API_BASE_URL=http://api:8080/api
+    depends_on:
+      - api
