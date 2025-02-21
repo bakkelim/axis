@@ -142,7 +142,7 @@ func ExecuteContract(c *gin.Context) {
 	}
 
 	// 3. Execute the SQL query
-	db, err := sql.Open(connector.Type, connector.ConnectionString)
+	db, err := sql.Open(connector.Type, buildConnectionString(connector.Config, connector.Type))
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database connection failed"})
 		return
@@ -216,4 +216,22 @@ func ExecuteContract(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, response)
+}
+
+// Parse the database configuration and build the connection string
+func buildConnectionString(config models.DatabaseConfig, connectorType string) string {
+	switch connectorType {
+	case "postgres":
+		return fmt.Sprintf(
+			"host=%s port=%d user=%s password=%s dbname=%s sslmode=disable",
+			config.Host, config.Port, config.User, config.Password, config.DBName,
+		)
+	case "mysql":
+		return fmt.Sprintf(
+			"%s:%s@tcp(%s:%d)/%s",
+			config.User, config.Password, config.Host, config.Port, config.DBName,
+		)
+	default:
+		return ""
+	}
 }
