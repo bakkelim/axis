@@ -24,12 +24,20 @@ type DatabaseQuery struct {
 	SQLQuery    string `json:"sqlQuery"`
 }
 
+// AnonymizationRule defines how a field should be anonymized
+type AnonymizationRule struct {
+	Field   string `json:"field"`   // The field name to anonymize
+	Method  string `json:"method"`  // The anonymization method (e.g., "mask", "hash", "randomize")
+	Pattern string `json:"pattern"` // Optional pattern for masking (e.g., "XXX-XX-****" for SSN)
+}
+
 // ResponseTemplate represents the template structure for API responses
 type ResponseTemplate struct {
-	ID          string                 `json:"id"`
-	Name        string                 `json:"name"`
-	Description string                 `json:"description"`
-	Template    map[string]interface{} `json:"template"`
+	ID            string                 `json:"id"`
+	Name          string                 `json:"name"`
+	Description   string                 `json:"description"`
+	Template      map[string]interface{} `json:"template"`
+	Anonymization []AnonymizationRule    `json:"anonymization,omitempty"`
 }
 
 // Contract represents the main contract structure

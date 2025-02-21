@@ -2,11 +2,13 @@ package controllers
 
 import (
 	"axis/src/models"
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -184,7 +186,6 @@ func ExecuteContract(c *gin.Context) {
 	// parse result into template
 	parsedResults := make([]map[string]interface{}, 0)
 	for _, result := range results {
-		// Convert template to string representation
 		templateStr := make(map[string]interface{})
 		for key, value := range contract.ResponseTemplate.Template {
 			if tmpl, ok := value.(string); ok {
@@ -201,7 +202,16 @@ func ExecuteContract(c *gin.Context) {
 					c.JSON(http.StatusInternalServerError, gin.H{"error": "Template execution failed"})
 					return
 				}
-				templateStr[key] = buf.String()
+
+				// Check if this field needs anonymization
+				fieldValue := buf.String()
+				for _, rule := range contract.ResponseTemplate.Anonymization {
+					if rule.Field == key {
+						fieldValue = anonymizeValue(fieldValue, rule)
+						break
+					}
+				}
+				templateStr[key] = fieldValue
 			}
 		}
 		parsedResults = append(parsedResults, templateStr)
@@ -216,6 +226,40 @@ func ExecuteContract(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, response)
+}
+
+// Add these helper functions before ExecuteContract
+func anonymizeValue(value string, rule models.AnonymizationRule) string {
+	switch rule.Method {
+	case "mask":
+		if rule.Pattern != "" {
+			return applyMaskPattern(value, rule.Pattern)
+		}
+		// Default mask if no pattern provided
+		return strings.Repeat("*", len(value))
+	case "hash":
+		h := sha256.New()
+		h.Write([]byte(value))
+		return fmt.Sprintf("%x", h.Sum(nil))
+	case "randomize":
+		return uuid.New().String() // Simple randomization
+	default:
+		return value
+	}
+}
+
+func applyMaskPattern(value string, pattern string) string {
+	result := []rune(pattern)
+	valueRunes := []rune(value)
+	valueIndex := 0
+
+	for i, r := range result {
+		if r == 'X' && valueIndex < len(valueRunes) {
+			result[i] = valueRunes[valueIndex]
+			valueIndex++
+		}
+	}
+	return string(result)
 }
 
 // Parse the database configuration and build the connection string
