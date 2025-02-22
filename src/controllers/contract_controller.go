@@ -191,24 +191,32 @@ func ExecuteContract(c *gin.Context) {
 	columns, _ := rows.Columns()
 
 	for rows.Next() {
-		// Create a slice of interface{} to store the values
-		values := make([]interface{}, len(columns))
-		valuePtrs := make([]interface{}, len(columns))
+		// Create a map for this row's data
+		rowData := make(map[string]interface{})
 
+		// Create properly typed containers for the scan
+		scanArgs := make([]interface{}, len(columns))
 		for i := range columns {
-			valuePtrs[i] = &values[i]
+			scanArgs[i] = new(interface{})
 		}
 
-		rows.Scan(valuePtrs...)
+		if err := rows.Scan(scanArgs...); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Error scanning row"})
+			return
+		}
 
-		// Create a map for this row
-		row := make(map[string]interface{})
+		// Copy the results into the row map
 		for i, col := range columns {
-			val := values[i]
-			row[col] = val
+			val := *(scanArgs[i].(*interface{}))
+			// Convert []byte to string for MySQL text-based columns
+			if b, ok := val.([]byte); ok {
+				rowData[col] = string(b)
+			} else {
+				rowData[col] = val
+			}
 		}
 
-		results = append(results, row)
+		results = append(results, rowData)
 	}
 
 	// parse result into template
