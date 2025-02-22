@@ -18,6 +18,7 @@ import (
 	"html/template"
 	"time"
 
+	_ "github.com/go-sql-driver/mysql"
 	_ "github.com/lib/pq"
 )
 
@@ -158,6 +159,7 @@ func ExecuteContract(c *gin.Context) {
 	// 3. Execute the SQL query
 	db, err := sql.Open(connector.Type, buildConnectionString(connector.Config, connector.Type))
 	if err != nil {
+		fmt.Println(err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database connection failed"})
 		return
 	}
@@ -293,10 +295,11 @@ func buildConnectionString(config models.DatabaseConfig, connectorType string) s
 			config.Host, config.Port, config.User, config.Password, config.DBName,
 		)
 	case "mysql":
-		return fmt.Sprintf(
+		connString := fmt.Sprintf(
 			"%s:%s@tcp(%s:%d)/%s",
 			config.User, config.Password, config.Host, config.Port, config.DBName,
 		)
+		return connString
 	default:
 		return ""
 	}
