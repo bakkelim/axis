@@ -8,11 +8,20 @@ import (
 	"path/filepath"
 )
 
-const contractsDir = "../data-contracts"
+const defaultContractsDir = "../data-contracts"
+
+var testContractsDir string
+
+func getContractsDir() string {
+	if testContractsDir != "" {
+		return testContractsDir
+	}
+	return defaultContractsDir
+}
 
 func init() {
 	// Ensure contracts directory exists
-	if err := os.MkdirAll(contractsDir, 0755); err != nil {
+	if err := os.MkdirAll(getContractsDir(), 0755); err != nil {
 		panic(err)
 	}
 }
@@ -23,12 +32,12 @@ var saveContract = func(contract *models.Contract) error {
 		return err
 	}
 
-	filename := filepath.Join(contractsDir, contract.ID+".json")
+	filename := filepath.Join(getContractsDir(), contract.ID+".json")
 	return os.WriteFile(filename, data, 0644)
 }
 
 func loadContract(id string) (*models.Contract, error) {
-	filename := filepath.Join(contractsDir, id+".json")
+	filename := filepath.Join(getContractsDir(), id+".json")
 	data, err := os.ReadFile(filename)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -44,8 +53,8 @@ func loadContract(id string) (*models.Contract, error) {
 	return &contract, nil
 }
 
-func listContracts() ([]models.Contract, error) {
-	files, err := os.ReadDir(contractsDir)
+var listContracts = func() ([]models.Contract, error) {
+	files, err := os.ReadDir(getContractsDir())
 	if err != nil {
 		return []models.Contract{}, err
 	}
@@ -67,7 +76,7 @@ func listContracts() ([]models.Contract, error) {
 }
 
 func deleteContract(id string) error {
-	filename := filepath.Join(contractsDir, id+".json")
+	filename := filepath.Join(getContractsDir(), id+".json")
 	if err := os.Remove(filename); err != nil {
 		if os.IsNotExist(err) {
 			return errors.New("contract not found")
