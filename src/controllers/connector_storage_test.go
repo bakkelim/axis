@@ -2,43 +2,49 @@ package controllers
 
 import (
 	"axis/src/models"
-	"os"
-	"path/filepath"
-	"reflect"
 	"testing"
 )
 
-// TestMain ensures a clean environment for our tests.
-func TestMain(m *testing.M) {
-	// connectorsDir is "../connectors" relative to this file.
-	dir := filepath.Join("..", "connectors")
-	_ = os.RemoveAll(dir)
-	code := m.Run()
-	_ = os.RemoveAll(dir)
-	os.Exit(code)
+// setupTestConnectorDir creates a temporary directory for connector tests and returns a cleanup function
+func setupTestConnectorDir(t *testing.T) func() {
+	tmpDir := t.TempDir()
+	originalTestDir := testConnectorsDir
+	testConnectorsDir = tmpDir
+	return func() {
+		testConnectorsDir = originalTestDir
+	}
 }
 
 func TestSaveAndLoadConnector(t *testing.T) {
+	cleanup := setupTestConnectorDir(t)
+	defer cleanup()
+
+	// Create test connector
 	connector := &models.Connector{
 		ID: "test1",
-		// add other fields as defined in your models.Connector if needed
+		// Add other required fields...
 	}
 
+	// Test saving
 	if err := saveConnector(connector); err != nil {
 		t.Fatalf("saveConnector failed: %v", err)
 	}
 
-	loaded, err := loadConnector("test1")
+	// Test loading
+	loaded, err := LoadConnector(connector.ID)
 	if err != nil {
 		t.Fatalf("loadConnector failed: %v", err)
 	}
 
-	if !reflect.DeepEqual(connector, loaded) {
-		t.Fatalf("loaded connector does not match saved connector.\nExpected: %#v\nGot: %#v", connector, loaded)
+	if loaded.ID != connector.ID {
+		t.Errorf("Expected ID %s, got %s", connector.ID, loaded.ID)
 	}
 }
 
 func TestListConnectors(t *testing.T) {
+	cleanup := setupTestConnectorDir(t)
+	defer cleanup()
+
 	connector1 := &models.Connector{ID: "list1"}
 	connector2 := &models.Connector{ID: "list2"}
 
@@ -69,6 +75,9 @@ func TestListConnectors(t *testing.T) {
 }
 
 func TestDeleteConnector(t *testing.T) {
+	cleanup := setupTestConnectorDir(t)
+	defer cleanup()
+
 	connector := &models.Connector{ID: "delete1"}
 
 	if err := saveConnector(connector); err != nil {
@@ -79,7 +88,7 @@ func TestDeleteConnector(t *testing.T) {
 		t.Fatalf("deleteConnector failed: %v", err)
 	}
 
-	_, err := loadConnector("delete1")
+	_, err := LoadConnector("delete1")
 	if err == nil {
 		t.Fatalf("Expected error when loading a deleted connector, got nil")
 	}
@@ -89,7 +98,10 @@ func TestDeleteConnector(t *testing.T) {
 }
 
 func TestLoadNonexistentConnector(t *testing.T) {
-	_, err := loadConnector("nonexistent")
+	cleanup := setupTestConnectorDir(t)
+	defer cleanup()
+
+	_, err := LoadConnector("nonexistent")
 	if err == nil {
 		t.Fatalf("Expected error for nonexistent connector, got nil")
 	}

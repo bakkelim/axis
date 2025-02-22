@@ -8,11 +8,19 @@ import (
 )
 
 func TestDeleteContract_Success(t *testing.T) {
+	// Set up test directory
+	tmpDir := t.TempDir()
+	originalTestDir := testContractsDir
+	testContractsDir = tmpDir
+	defer func() {
+		testContractsDir = originalTestDir
+	}()
+
 	const testID = "test_contract"
-	filename := filepath.Join(contractsDir, testID+".json")
+	filename := filepath.Join(getContractsDir(), testID+".json")
 
 	// Ensure the contracts directory exists.
-	if err := os.MkdirAll(contractsDir, 0755); err != nil {
+	if err := os.MkdirAll(getContractsDir(), 0755); err != nil {
 		t.Fatalf("error creating contracts dir: %v", err)
 	}
 
@@ -33,6 +41,14 @@ func TestDeleteContract_Success(t *testing.T) {
 }
 
 func TestStorageDeleteContract_NotFound(t *testing.T) {
+	// Set up test directory
+	tmpDir := t.TempDir()
+	originalTestDir := testContractsDir
+	testContractsDir = tmpDir
+	defer func() {
+		testContractsDir = originalTestDir
+	}()
+
 	const nonExistentID = "non_existent_contract"
 	err := deleteContract(nonExistentID)
 	if err == nil {

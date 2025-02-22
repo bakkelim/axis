@@ -42,7 +42,7 @@ func ListConnectors(c *gin.Context) {
 func GetConnector(c *gin.Context) {
 	id := c.Param("id")
 
-	connector, err := loadConnector(id)
+	connector, err := LoadConnector(id)
 	if err != nil {
 		if err.Error() == "connector not found" {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Connector not found"})
@@ -60,8 +60,7 @@ func UpdateConnector(c *gin.Context) {
 	id := c.Param("id")
 
 	// Check if connector exists
-	_, err := loadConnector(id)
-	if err != nil {
+	if _, err := LoadConnector(id); err != nil {
 		if err.Error() == "connector not found" {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Connector not found"})
 		} else {
@@ -104,8 +103,16 @@ func DeleteConnector(c *gin.Context) {
 // TestConnection tests if a connector can establish a connection
 func TestConnection(c *gin.Context) {
 	id := c.Param("id")
-	_ = id
-	// TODO: Implement connection testing logic
 
+	// First check if connector exists
+	if _, err := LoadConnector(id); err != nil {
+		if err.Error() == "connector not found" {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Connector not found"})
+		} else {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load connector"})
+		}
+		return
+	}
+	// TODO: Implement actual connection testing logic
 	c.JSON(http.StatusOK, gin.H{"status": "connection successful"})
 }

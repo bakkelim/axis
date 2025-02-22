@@ -3,11 +3,8 @@ package controllers
 import (
 	"axis/src/models"
 	"crypto/sha256"
-	"encoding/json"
 	"fmt"
 	"net/http"
-	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -21,6 +18,9 @@ import (
 	_ "github.com/go-sql-driver/mysql"
 	_ "github.com/lib/pq"
 )
+
+// For testing purposes
+var sqlOpen = sql.Open
 
 // CreateContract creates a new contract
 func CreateContract(c *gin.Context) {
@@ -146,21 +146,18 @@ func ExecuteContract(c *gin.Context) {
 	}
 
 	// Load the connector
-	connectorPath := filepath.Join("../connectors", fmt.Sprintf("%s.json", contract.Query.ConnectorID))
-	connectorData, err := os.ReadFile(connectorPath)
+	connector, err := LoadConnector(contract.Query.ConnectorID)
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Connector not found"})
-		return
-	}
-
-	var connector models.Connector
-	if err := json.Unmarshal(connectorData, &connector); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Error parsing connector data"})
+		if err.Error() == "connector not found" {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Connector not found"})
+		} else {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load connector"})
+		}
 		return
 	}
 
 	// Execute the SQL query
-	db, err := sql.Open(connector.Type, buildConnectionString(connector.Config, connector.Type))
+	db, err := sqlOpen(connector.Type, buildConnectionString(connector.Config, connector.Type))
 	if err != nil {
 		fmt.Println(err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database connection failed"})
@@ -290,9 +287,21 @@ func applyMaskPattern(value string, pattern string) string {
 	valueIndex := 0
 
 	for i, r := range result {
-		if r == 'X' && valueIndex < len(valueRunes) {
-			result[i] = valueRunes[valueIndex]
-			valueIndex++
+		if r == 'X' {
+			if valueIndex < len(valueRunes) {
+				// Skip any dashes in the input value
+				for valueIndex < len(valueRunes) && valueRunes[valueIndex] == '-' {
+					valueIndex++
+				}
+				if valueIndex < len(valueRunes) {
+					result[i] = valueRunes[valueIndex]
+					valueIndex++
+				} else {
+					result[i] = '*'
+				}
+			} else {
+				result[i] = '*'
+			}
 		}
 	}
 	return string(result)
@@ -330,27 +339,39 @@ func buildWhereClause(filters []models.FilterCondition) (string, []interface{}) 
 		switch filter.Operator {
 		case models.OperatorEquals:
 			conditions = append(conditions, fmt.Sprintf("%s = $%d", filter.Field, paramCount))
+			values = append(values, filter.Value)
+			paramCount++
 		case models.OperatorNotEquals:
 			conditions = append(conditions, fmt.Sprintf("%s != $%d", filter.Field, paramCount))
+			values = append(values, filter.Value)
+			paramCount++
 		case models.OperatorGreater:
 			conditions = append(conditions, fmt.Sprintf("%s > $%d", filter.Field, paramCount))
+			values = append(values, filter.Value)
+			paramCount++
 		case models.OperatorLess:
 			conditions = append(conditions, fmt.Sprintf("%s < $%d", filter.Field, paramCount))
+			values = append(values, filter.Value)
+			paramCount++
 		case models.OperatorLike:
 			conditions = append(conditions, fmt.Sprintf("%s LIKE $%d", filter.Field, paramCount))
+			values = append(values, filter.Value)
+			paramCount++
 		case models.OperatorIn:
-			if values, ok := filter.Value.([]interface{}); ok {
-				placeholders := make([]string, len(values))
-				for i := range values {
+			if inValues, ok := filter.Value.([]interface{}); ok {
+				placeholders := make([]string, len(inValues))
+				for i := range inValues {
 					placeholders[i] = fmt.Sprintf("$%d", paramCount+i)
 				}
 				conditions = append(conditions, fmt.Sprintf("%s IN (%s)",
 					filter.Field, strings.Join(placeholders, ",")))
-				paramCount += len(values) - 1
+				values = append(values, inValues...)
+				paramCount += len(inValues)
+			} else {
+				// If not a valid slice, skip this condition but keep the value
+				values = append(values, filter.Value)
 			}
 		}
-		values = append(values, filter.Value)
-		paramCount++
 	}
 
 	return " WHERE " + strings.Join(conditions, " AND "), values

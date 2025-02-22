@@ -2,16 +2,18 @@ package controllers
 
 import (
 	"axis/src/models"
+	"database/sql"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
-	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 
+	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // TestCreateContract_InvalidJSON verifies that providing invalid JSON returns a 400 error.
@@ -122,7 +124,15 @@ func TestExecuteContract_ContractNotFound(t *testing.T) {
 
 	// Use an id that does not match any contract file.
 	c.Params = gin.Params{{Key: "id", Value: "non-existing-id"}}
-	c.Request = httptest.NewRequest("GET", "/contracts/non-existing-id/execute", nil)
+
+	// Create a valid request body
+	reqBody := strings.NewReader(`{
+		"filters": [],
+		"pagination": {"page": 1, "page_size": 10}
+	}`)
+
+	c.Request = httptest.NewRequest("POST", "/contracts/non-existing-id/execute", reqBody)
+	c.Request.Header.Set("Content-Type", "application/json")
 
 	ExecuteContract(c)
 
@@ -143,6 +153,18 @@ func TestExecuteContract_ContractNotFound(t *testing.T) {
 // In an isolated test environment, missing configuration or database should result in an internal server error.
 func TestListContracts_InternalServerError(t *testing.T) {
 	gin.SetMode(gin.TestMode)
+
+	// Save the original listContracts function
+	originalListContracts := listContracts
+	// Restore it after the test
+	defer func() {
+		listContracts = originalListContracts
+	}()
+
+	// Mock listContracts to return an error
+	listContracts = func() ([]models.Contract, error) {
+		return nil, errors.New("database error")
+	}
 
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
@@ -207,134 +229,95 @@ func TestAnonymizeValue(t *testing.T) {
 	}
 }
 
-func TestExecuteContract_WithAnonymization(t *testing.T) {
-	// Setup test environment
-	baseDir, contractsDir, connectorsDir := setupTestDirs(t)
-	defer os.RemoveAll(baseDir)
-
-	// Create test connector
-	connector := models.Connector{
-		ID:   "test-conn",
-		Type: "postgres",
-		Config: models.DatabaseConfig{
-			Host:     "localhost",
-			Port:     5432,
-			User:     "testuser",
-			Password: "testpass",
-			DBName:   "testdb",
-		},
+// setupMockDB creates a mock database and returns the mock and a cleanup function
+func setupMockDB(t *testing.T, expectedQuery string, rows *sqlmock.Rows) func() {
+	originalSqlOpen := sqlOpen
+	sqlOpen = func(driverName, dataSource string) (*sql.DB, error) {
+		db, mock, err := sqlmock.New()
+		if err != nil {
+			t.Fatalf("Failed to create mock DB: %v", err)
+		}
+		mock.ExpectQuery(expectedQuery).WillReturnRows(rows)
+		return db, nil
 	}
-	saveTestConnector(t, connectorsDir, &connector)
+	return func() {
+		sqlOpen = originalSqlOpen
+	}
+}
 
-	// Create test contract with anonymization rules
-	contract := models.Contract{
-		ID:   "test-contract",
+// setupTestContract creates a test contract with the given configuration
+func setupTestContract(t *testing.T, id string, connectorID string, query string, template map[string]interface{}, anonymization []models.AnonymizationRule) *models.Contract {
+	contract := &models.Contract{
+		ID:   id,
 		Name: "Test Contract",
 		Query: models.DatabaseQuery{
-			ConnectorID: "test-conn",
-			SQLQuery:    "SELECT id, email, ssn FROM users",
+			ConnectorID: connectorID,
+			SQLQuery:    query,
 		},
 		ResponseTemplate: models.ResponseTemplate{
-			Template: map[string]interface{}{
-				"user_id": "{{.id}}",
-				"email":   "{{.email}}",
-				"ssn":     "{{.ssn}}",
-			},
-			Anonymization: []models.AnonymizationRule{
-				{
-					Field:  "email",
-					Method: "hash",
-				},
-				{
-					Field:   "ssn",
-					Method:  "mask",
-					Pattern: "XXX-XX-****",
-				},
-			},
+			Template:      template,
+			Anonymization: anonymization,
 		},
 	}
-	saveTestContract(t, contractsDir, &contract)
+	if err := saveContract(contract); err != nil {
+		t.Fatalf("Failed to save contract: %v", err)
+	}
+	return contract
+}
 
-	// Setup Gin test context
-	gin.SetMode(gin.TestMode)
-	w := httptest.NewRecorder()
-	c, _ := gin.CreateTestContext(w)
+func TestExecuteContract_WithAnonymization(t *testing.T) {
+	_, _, _, cleanup := setupTestEnvironment(t)
+	defer cleanup()
+
+	rows := sqlmock.NewRows([]string{"id", "email", "ssn"}).
+		AddRow("1", "test@example.com", "123-45-6789")
+	cleanup = setupMockDB(t, "SELECT id, email, ssn FROM users", rows)
+	defer cleanup()
+
+	// Create test connector
+	testConn := setupTestConnector(t, "test-conn")
+
+	// Create test contract
+	contract := setupTestContract(t, "test-contract", testConn.ID,
+		"SELECT id, email, ssn FROM users",
+		map[string]interface{}{
+			"user_id": "{{.id}}",
+			"email":   "{{.email}}",
+			"ssn":     "{{.ssn}}",
+		},
+		[]models.AnonymizationRule{
+			{Field: "email", Method: "hash"},
+			{Field: "ssn", Method: "mask", Pattern: "XXX-XX-****"},
+		},
+	)
+
+	// Execute the contract
+	c, w := setupTestContext("POST", "/contracts/test-contract/execute", `{
+		"filters": [],
+		"pagination": {"page": 1, "page_size": 10}
+	}`)
 	c.Params = gin.Params{{Key: "id", Value: contract.ID}}
-
-	// Mock DB connection (you might want to use sqlmock here)
-	// For this example, we'll check the response structure
 
 	ExecuteContract(c)
 
-	// Verify response structure
+	// Verify response
+	assert.Equal(t, http.StatusOK, w.Code)
+
 	var response map[string]interface{}
 	err := json.Unmarshal(w.Body.Bytes(), &response)
-	if err != nil {
-		t.Fatalf("Failed to parse response: %v", err)
-	}
+	require.NoError(t, err)
 
-	// Check basic response structure
-	assert.Equal(t, http.StatusOK, w.Code)
 	assert.Equal(t, contract.ID, response["contract_id"])
 	assert.Equal(t, "success", response["status"])
 
-	// Helper functions for test setup
 	results, ok := response["results"].([]interface{})
-	if !ok {
-		t.Fatal("Results should be an array")
-	}
+	require.True(t, ok)
+	require.Len(t, results, 1)
 
-	// Verify anonymization in results
-	if len(results) > 0 {
-		result := results[0].(map[string]interface{})
-
-		// Check that email is hashed (64 characters hex string)
-		if email, ok := result["email"].(string); ok {
-			assert.Regexp(t, "^[0-9a-f]{64}$", email)
-		}
-
-		// Check that SSN follows mask pattern
-		if ssn, ok := result["ssn"].(string); ok {
-			assert.Regexp(t, "^\\d{3}-\\d{2}-\\*{4}$", ssn)
-		}
-	}
-}
-
-// Helper functions for test setup
-func setupTestDirs(t *testing.T) (string, string, string) {
-	baseDir := t.TempDir()
-	contractsDir := filepath.Join(baseDir, "contracts")
-	connectorsDir := filepath.Join(baseDir, "connectors")
-
-	for _, dir := range []string{contractsDir, connectorsDir} {
-		if err := os.MkdirAll(dir, 0755); err != nil {
-			t.Fatal(err)
-		}
-	}
-
-	return baseDir, contractsDir, connectorsDir
-}
-
-func saveTestConnector(t *testing.T, dir string, connector *models.Connector) {
-	data, err := json.Marshal(connector)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if err := os.WriteFile(filepath.Join(dir, connector.ID+".json"), data, 0644); err != nil {
-		t.Fatal(err)
-	}
-}
-
-func saveTestContract(t *testing.T, dir string, contract *models.Contract) {
-	data, err := json.Marshal(contract)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if err := os.WriteFile(filepath.Join(dir, contract.ID+".json"), data, 0644); err != nil {
-		t.Fatal(err)
-	}
+	result := results[0].(map[string]interface{})
+	assert.Equal(t, "1", result["user_id"])
+	assert.Regexp(t, "^[0-9a-f]{64}$", result["email"]) // Hashed email
+	assert.Equal(t, "123-45-****", result["ssn"])       // Masked SSN
 }
 
 func TestBuildWhereClause(t *testing.T) {
@@ -496,60 +479,38 @@ func TestBuildOrderByClause(t *testing.T) {
 }
 
 func TestExecuteContract_WithSorting(t *testing.T) {
-	// Setup test environment
-	baseDir, contractsDir, connectorsDir := setupTestDirs(t)
-	defer os.RemoveAll(baseDir)
+	_, _, _, cleanup := setupTestEnvironment(t)
+	defer cleanup()
+
+	rows := sqlmock.NewRows([]string{"id", "name", "age"}).
+		AddRow("1", "Alice", 30)
+	cleanup = setupMockDB(t, "SELECT id, name, age FROM users", rows)
+	defer cleanup()
 
 	// Create test connector
-	connector := models.Connector{
-		ID:   "test-conn",
-		Type: "postgres",
-		Config: models.DatabaseConfig{
-			Host:     "localhost",
-			Port:     5432,
-			User:     "testuser",
-			Password: "testpass",
-			DBName:   "testdb",
-		},
-	}
-	saveTestConnector(t, connectorsDir, &connector)
+	testConn := setupTestConnector(t, "test-conn")
 
 	// Create test contract with sorting options
-	contract := models.Contract{
-		ID:   "test-contract",
-		Name: "Test Contract",
-		Query: models.DatabaseQuery{
-			ConnectorID: "test-conn",
-			SQLQuery:    "SELECT id, name, age FROM users",
-			Sort: []models.SortOption{
-				{
-					Field:     "age",
-					Direction: "desc",
-				},
-				{
-					Field:     "name",
-					Direction: "asc",
-				},
-			},
+	contract := setupTestContract(t, "test-contract", testConn.ID,
+		"SELECT id, name, age FROM users",
+		map[string]interface{}{
+			"user_id": "{{.id}}",
+			"name":    "{{.name}}",
+			"age":     "{{.age}}",
 		},
-		ResponseTemplate: models.ResponseTemplate{
-			Template: map[string]interface{}{
-				"user_id": "{{.id}}",
-				"name":    "{{.name}}",
-				"age":     "{{.age}}",
-			},
-		},
-	}
-	saveTestContract(t, contractsDir, &contract)
+		nil, // no anonymization rules
+	)
 
-	// Setup Gin test context
-	gin.SetMode(gin.TestMode)
-	w := httptest.NewRecorder()
-	c, _ := gin.CreateTestContext(w)
+	// Execute the contract
+	c, w := setupTestContext("POST", "/contracts/test-contract/execute", `{
+		"filters": [],
+		"pagination": {"page": 1, "page_size": 10},
+		"sort": [
+			{"field": "age", "direction": "desc"},
+			{"field": "name", "direction": "asc"}
+		]
+	}`)
 	c.Params = gin.Params{{Key: "id", Value: contract.ID}}
-
-	// Mock DB connection (you might want to use sqlmock here)
-	// For this example, we'll check the response structure
 
 	ExecuteContract(c)
 

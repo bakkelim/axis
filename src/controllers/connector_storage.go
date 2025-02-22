@@ -8,27 +8,35 @@ import (
 	"path/filepath"
 )
 
-const connectorsDir = "../connectors"
+const defaultConnectorsDir = "../connectors"
 
-func init() {
-	// Ensure connectors directory exists
-	if err := os.MkdirAll(connectorsDir, 0755); err != nil {
-		panic(err)
+var testConnectorsDir string
+
+func getConnectorsDir() string {
+	if testConnectorsDir != "" {
+		return testConnectorsDir
 	}
+	return defaultConnectorsDir
 }
 
 var saveConnector = func(connector *models.Connector) error {
+	// Ensure directory exists before saving
+	if err := os.MkdirAll(getConnectorsDir(), 0755); err != nil {
+		return err
+	}
+
 	data, err := json.Marshal(connector)
 	if err != nil {
 		return err
 	}
 
-	filename := filepath.Join(connectorsDir, connector.ID+".json")
+	filename := filepath.Join(getConnectorsDir(), connector.ID+".json")
 	return os.WriteFile(filename, data, 0644)
 }
 
-func loadConnector(id string) (*models.Connector, error) {
-	filename := filepath.Join(connectorsDir, id+".json")
+// LoadConnector retrieves a connector by its ID
+func LoadConnector(id string) (*models.Connector, error) {
+	filename := filepath.Join(getConnectorsDir(), id+".json")
 	data, err := os.ReadFile(filename)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -45,7 +53,7 @@ func loadConnector(id string) (*models.Connector, error) {
 }
 
 func listConnectors() ([]models.Connector, error) {
-	files, err := os.ReadDir(connectorsDir)
+	files, err := os.ReadDir(getConnectorsDir())
 	if err != nil {
 		return []models.Connector{}, err
 	}
@@ -57,7 +65,7 @@ func listConnectors() ([]models.Connector, error) {
 		}
 
 		id := file.Name()[:len(file.Name())-5] // remove .json
-		connector, err := loadConnector(id)
+		connector, err := LoadConnector(id)
 		if err != nil {
 			continue
 		}
@@ -67,7 +75,7 @@ func listConnectors() ([]models.Connector, error) {
 }
 
 func deleteConnector(id string) error {
-	filename := filepath.Join(connectorsDir, id+".json")
+	filename := filepath.Join(getConnectorsDir(), id+".json")
 	if err := os.Remove(filename); err != nil {
 		if os.IsNotExist(err) {
 			return errors.New("connector not found")
