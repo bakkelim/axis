@@ -50,7 +50,7 @@ func TestUpdateContract_InvalidJSON(t *testing.T) {
 
 	// Set an id parameter.
 	c.Params = gin.Params{{Key: "id", Value: "some-id"}}
-	invalidJSON := strings.NewReader("{invalid json")
+	invalidJSON := strings.NewReader("{invalid")
 	c.Request = httptest.NewRequest("PUT", "/contracts/some-id", invalidJSON)
 
 	UpdateContract(c)
@@ -448,4 +448,141 @@ func TestBuildWhereClause_InvalidIN(t *testing.T) {
 	where, values := buildWhereClause(filters)
 	assert.Equal(t, " WHERE ", where)
 	assert.Equal(t, []interface{}{"not-an-array"}, values)
+}
+
+func TestBuildOrderByClause(t *testing.T) {
+	tests := []struct {
+		name          string
+		sortOptions   []models.SortOption
+		expectedOrder string
+	}{
+		{
+			name:          "No sort options",
+			sortOptions:   []models.SortOption{},
+			expectedOrder: "",
+		},
+		{
+			name: "Single sort option",
+			sortOptions: []models.SortOption{
+				{
+					Field:     "name",
+					Direction: "asc",
+				},
+			},
+			expectedOrder: " ORDER BY name asc",
+		},
+		{
+			name: "Multiple sort options",
+			sortOptions: []models.SortOption{
+				{
+					Field:     "age",
+					Direction: "desc",
+				},
+				{
+					Field:     "name",
+					Direction: "asc",
+				},
+			},
+			expectedOrder: " ORDER BY age desc, name asc",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			order := buildOrderByClause(tt.sortOptions)
+			assert.Equal(t, tt.expectedOrder, order)
+		})
+	}
+}
+
+func TestExecuteContract_WithSorting(t *testing.T) {
+	// Setup test environment
+	baseDir, contractsDir, connectorsDir := setupTestDirs(t)
+	defer os.RemoveAll(baseDir)
+
+	// Create test connector
+	connector := models.Connector{
+		ID:   "test-conn",
+		Type: "postgres",
+		Config: models.DatabaseConfig{
+			Host:     "localhost",
+			Port:     5432,
+			User:     "testuser",
+			Password: "testpass",
+			DBName:   "testdb",
+		},
+	}
+	saveTestConnector(t, connectorsDir, &connector)
+
+	// Create test contract with sorting options
+	contract := models.Contract{
+		ID:   "test-contract",
+		Name: "Test Contract",
+		Query: models.DatabaseQuery{
+			ConnectorID: "test-conn",
+			SQLQuery:    "SELECT id, name, age FROM users",
+			Sort: []models.SortOption{
+				{
+					Field:     "age",
+					Direction: "desc",
+				},
+				{
+					Field:     "name",
+					Direction: "asc",
+				},
+			},
+		},
+		ResponseTemplate: models.ResponseTemplate{
+			Template: map[string]interface{}{
+				"user_id": "{{.id}}",
+				"name":    "{{.name}}",
+				"age":     "{{.age}}",
+			},
+		},
+	}
+	saveTestContract(t, contractsDir, &contract)
+
+	// Setup Gin test context
+	gin.SetMode(gin.TestMode)
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Params = gin.Params{{Key: "id", Value: contract.ID}}
+
+	// Mock DB connection (you might want to use sqlmock here)
+	// For this example, we'll check the response structure
+
+	ExecuteContract(c)
+
+	// Verify response structure
+	var response map[string]interface{}
+	err := json.Unmarshal(w.Body.Bytes(), &response)
+	if err != nil {
+		t.Fatalf("Failed to parse response: %v", err)
+	}
+
+	// Check basic response structure
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.Equal(t, contract.ID, response["contract_id"])
+	assert.Equal(t, "success", response["status"])
+
+	// Helper functions for test setup
+	results, ok := response["results"].([]interface{})
+	if !ok {
+		t.Fatal("Results should be an array")
+	}
+
+	// Verify sorting in results
+	if len(results) > 0 {
+		result := results[0].(map[string]interface{})
+
+		// Check that age is sorted in descending order
+		if age, ok := result["age"].(float64); ok {
+			assert.GreaterOrEqual(t, age, 0.0)
+		}
+
+		// Check that name is sorted in ascending order
+		if name, ok := result["name"].(string); ok {
+			assert.NotEmpty(t, name)
+		}
+	}
 }

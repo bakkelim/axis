@@ -43,18 +43,26 @@ type PaginationOptions struct {
 	PageSize int `json:"pageSize"` // Number of items per page
 }
 
+// SortOption represents a single sorting option
+type SortOption struct {
+	Field     string `json:"field"`     // Column name to sort by
+	Direction string `json:"direction"` // Sort direction ("asc" or "desc")
+}
+
 // DatabaseQuery represents the query configuration
 type DatabaseQuery struct {
 	ConnectorID string             `json:"connectorId"`
 	SQLQuery    string             `json:"sqlQuery"`
 	Filters     []FilterCondition  `json:"filters,omitempty"`
 	Pagination  *PaginationOptions `json:"pagination,omitempty"`
+	Sort        []SortOption       `json:"sort,omitempty"`
 }
 
 // ExecuteContractRequest represents the request body for contract execution
 type ExecuteContractRequest struct {
 	Filters    []FilterCondition  `json:"filters,omitempty"`
 	Pagination *PaginationOptions `json:"pagination,omitempty"`
+	Sort       []SortOption       `json:"sort,omitempty"`
 }
 
 // AnonymizationRule defines how a field should be anonymized

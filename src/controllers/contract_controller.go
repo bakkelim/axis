@@ -134,15 +134,18 @@ func ExecuteContract(c *gin.Context) {
 		return
 	}
 
-	// Apply filters and pagination from request if provided
+	// Apply filters, pagination, and sorting from request if provided
 	if req.Filters != nil {
 		contract.Query.Filters = req.Filters
 	}
 	if req.Pagination != nil {
 		contract.Query.Pagination = req.Pagination
 	}
+	if req.Sort != nil {
+		contract.Query.Sort = req.Sort
+	}
 
-	// 2. Load the connector
+	// Load the connector
 	connectorPath := filepath.Join("../connectors", fmt.Sprintf("%s.json", contract.Query.ConnectorID))
 	connectorData, err := os.ReadFile(connectorPath)
 	if err != nil {
@@ -156,7 +159,7 @@ func ExecuteContract(c *gin.Context) {
 		return
 	}
 
-	// 3. Execute the SQL query
+	// Execute the SQL query
 	db, err := sql.Open(connector.Type, buildConnectionString(connector.Config, connector.Type))
 	if err != nil {
 		fmt.Println(err)
@@ -167,7 +170,8 @@ func ExecuteContract(c *gin.Context) {
 
 	baseQuery := contract.Query.SQLQuery
 	whereClause, values := buildWhereClause(contract.Query.Filters)
-	query := baseQuery + whereClause
+	orderByClause := buildOrderByClause(contract.Query.Sort)
+	query := baseQuery + whereClause + orderByClause
 
 	if contract.Query.Pagination != nil {
 		offset := (contract.Query.Pagination.Page - 1) * contract.Query.Pagination.PageSize
@@ -182,7 +186,7 @@ func ExecuteContract(c *gin.Context) {
 	}
 	defer rows.Close()
 
-	// 3. Generate the response template
+	// Generate the response template
 	var results []map[string]interface{}
 	columns, _ := rows.Columns()
 
@@ -241,7 +245,7 @@ func ExecuteContract(c *gin.Context) {
 		parsedResults = append(parsedResults, templateStr)
 	}
 
-	// 5. Return the response
+	// Return the response
 	response := gin.H{
 		"contract_id": id,
 		"status":      "success",
@@ -342,4 +346,17 @@ func buildWhereClause(filters []models.FilterCondition) (string, []interface{}) 
 	}
 
 	return " WHERE " + strings.Join(conditions, " AND "), values
+}
+
+func buildOrderByClause(sortOptions []models.SortOption) string {
+	if len(sortOptions) == 0 {
+		return ""
+	}
+
+	var orderByClauses []string
+	for _, sortOption := range sortOptions {
+		orderByClauses = append(orderByClauses, fmt.Sprintf("%s %s", sortOption.Field, sortOption.Direction))
+	}
+
+	return " ORDER BY " + strings.Join(orderByClauses, ", ")
 }
