@@ -16,7 +16,7 @@ services:
     ports:
       - "5432:5432"
 
-  nextjs:
+  axis-ui:
     build:
       context: ../axis-ui
       dockerfile: Dockerfile
@@ -27,3 +27,13 @@ services:
       - API_BASE_URL=http://api:8080/api
     depends_on:
       - api
+
+  axis-ai-chatbot:
+    build:
+      context: ../axis-ai
+      dockerfile: Dockerfile
+    ports:
+      - "8501:8501"
+    environment:
+      - OPENAI_API_KEY={YOUR_OPENAI_API_KEY}
+      - API_BASE_URL=http://api:8080/api
