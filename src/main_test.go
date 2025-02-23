@@ -38,7 +38,11 @@ func TestMainDefaultPort(t *testing.T) {
 	t.Setenv("PORT", "")
 	cmd := runMainServer(t)
 	// Ensure the process is killed when the test ends.
-	defer cmd.Process.Kill()
+	defer func() {
+		if err := cmd.Process.Kill(); err != nil {
+			t.Fatalf("Failed to kill process: %v", err)
+		}
+	}()
 
 	assertPortListening(t, "localhost:8080")
 }
@@ -47,7 +51,11 @@ func TestMainCustomPort(t *testing.T) {
 	const customPort = "9090"
 	t.Setenv("PORT", customPort)
 	cmd := runMainServer(t)
-	defer cmd.Process.Kill()
+	defer func() {
+		if err := cmd.Process.Kill(); err != nil {
+			t.Fatalf("Failed to kill process: %v", err)
+		}
+	}()
 
 	assertPortListening(t, "localhost:"+customPort)
 }
