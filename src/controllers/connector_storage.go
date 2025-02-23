@@ -27,7 +27,7 @@ var saveConnector = func(connector *models.Connector) error {
 	return os.WriteFile(filename, data, 0644)
 }
 
-func loadConnector(id string) (*models.Connector, error) {
+var loadConnector = func (id string) (*models.Connector, error) {
 	filename := filepath.Join(connectorsDir, id+".json")
 	data, err := os.ReadFile(filename)
 	if err != nil {
