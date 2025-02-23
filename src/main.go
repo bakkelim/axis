@@ -22,5 +22,8 @@ func main() {
 	}
 
 	// Start the server
-	router.Run(":" + port)
+	err := router.Run(":" + port)
+	if err != nil {
+		panic(err)
+	}
 }

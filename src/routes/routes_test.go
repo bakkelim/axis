@@ -6,7 +6,6 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-
 func TestSetupRoutes(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
@@ -43,4 +42,3 @@ func TestSetupRoutes(t *testing.T) {
 		}
 	}
 }
-
