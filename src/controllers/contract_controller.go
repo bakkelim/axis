@@ -169,9 +169,17 @@ func ExecuteContract(c *gin.Context) {
 	defer db.Close()
 
 	baseQuery := contract.Query.SQLQuery
-	whereClause, values := buildWhereClause(contract.Query.Filters)
+	whereClause, values := buildWhereClause(contract.Query.Filters, connector.Type)
 	orderByClause := buildOrderByClause(contract.Query.Sort)
-	query := baseQuery + whereClause + orderByClause
+
+	// Split the query to handle GROUP BY correctly
+	var query string
+	if strings.Contains(baseQuery, "GROUP BY") {
+		parts := strings.SplitN(baseQuery, "GROUP BY", 2)
+		query = parts[0] + whereClause + " GROUP BY" + parts[1] + orderByClause
+	} else {
+		query = baseQuery + whereClause + orderByClause
+	}
 
 	if contract.Query.Pagination != nil {
 		offset := (contract.Query.Pagination.Page - 1) * contract.Query.Pagination.PageSize
@@ -181,6 +189,7 @@ func ExecuteContract(c *gin.Context) {
 
 	rows, err := db.Query(query, values...)
 	if err != nil {
+		fmt.Println(query)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Query execution failed"})
 		return
 	}
@@ -317,7 +326,7 @@ func buildConnectionString(config models.DatabaseConfig, connectorType string) s
 	}
 }
 
-func buildWhereClause(filters []models.FilterCondition) (string, []interface{}) {
+func buildWhereClause(filters []models.FilterCondition, dbType string) (string, []interface{}) {
 	if len(filters) == 0 {
 		return "", nil
 	}
@@ -326,31 +335,48 @@ func buildWhereClause(filters []models.FilterCondition) (string, []interface{}) 
 	var values []interface{}
 	paramCount := 1
 
+	// Get the correct placeholder based on database type
+	placeholder := func(i int) string {
+		if dbType == "postgres" {
+			return fmt.Sprintf("$%d", i)
+		}
+		return "?"
+	}
+
 	for _, filter := range filters {
 		switch filter.Operator {
 		case models.OperatorEquals:
-			conditions = append(conditions, fmt.Sprintf("%s = $%d", filter.Field, paramCount))
+			conditions = append(conditions, fmt.Sprintf("co.%s = %s", filter.Field, placeholder(paramCount)))
+			values = append(values, filter.Value)
+			paramCount++
 		case models.OperatorNotEquals:
-			conditions = append(conditions, fmt.Sprintf("%s != $%d", filter.Field, paramCount))
+			conditions = append(conditions, fmt.Sprintf("co.%s != %s", filter.Field, placeholder(paramCount)))
+			values = append(values, filter.Value)
+			paramCount++
 		case models.OperatorGreater:
-			conditions = append(conditions, fmt.Sprintf("%s > $%d", filter.Field, paramCount))
+			conditions = append(conditions, fmt.Sprintf("co.%s > %s", filter.Field, placeholder(paramCount)))
+			values = append(values, filter.Value)
+			paramCount++
 		case models.OperatorLess:
-			conditions = append(conditions, fmt.Sprintf("%s < $%d", filter.Field, paramCount))
+			conditions = append(conditions, fmt.Sprintf("co.%s < %s", filter.Field, placeholder(paramCount)))
+			values = append(values, filter.Value)
+			paramCount++
 		case models.OperatorLike:
-			conditions = append(conditions, fmt.Sprintf("%s LIKE $%d", filter.Field, paramCount))
+			conditions = append(conditions, fmt.Sprintf("co.%s LIKE %s", filter.Field, placeholder(paramCount)))
+			values = append(values, filter.Value)
+			paramCount++
 		case models.OperatorIn:
-			if values, ok := filter.Value.([]interface{}); ok {
-				placeholders := make([]string, len(values))
-				for i := range values {
-					placeholders[i] = fmt.Sprintf("$%d", paramCount+i)
+			if inValues, ok := filter.Value.([]interface{}); ok {
+				placeholders := make([]string, len(inValues))
+				for i := range inValues {
+					placeholders[i] = placeholder(paramCount + i)
+					values = append(values, inValues[i])
 				}
-				conditions = append(conditions, fmt.Sprintf("%s IN (%s)",
+				conditions = append(conditions, fmt.Sprintf("co.%s IN (%s)",
 					filter.Field, strings.Join(placeholders, ",")))
-				paramCount += len(values) - 1
+				paramCount += len(inValues)
 			}
 		}
-		values = append(values, filter.Value)
-		paramCount++
 	}
 
 	return " WHERE " + strings.Join(conditions, " AND "), values
