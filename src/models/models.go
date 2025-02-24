@@ -75,8 +75,6 @@ type AnonymizationRule struct {
 // ResponseTemplate represents the template structure for API responses
 type ResponseTemplate struct {
 	ID            string                 `json:"id"`
-	Name          string                 `json:"name"`
-	Description   string                 `json:"description"`
 	Template      map[string]interface{} `json:"template"`
 	Anonymization []AnonymizationRule    `json:"anonymization,omitempty"`
 }
