@@ -41,7 +41,7 @@ func TestCreateConnector_Success(t *testing.T) {
 	router.POST("/connectors", CreateConnector)
 
 	// Create a valid JSON body; adjust fields as per your models.Connector definition.
-	connectorData := map[string]interface{}{
+	connectorData := map[string]any{
 		"name": "Test Connector",
 	}
 	body, _ := json.Marshal(connectorData)
@@ -94,7 +94,7 @@ func TestCreateConnector_SaveError(t *testing.T) {
 	router := gin.New()
 	router.POST("/connectors", CreateConnector)
 
-	connectorData := map[string]interface{}{
+	connectorData := map[string]any{
 		"name": "Test Connector",
 	}
 	body, _ := json.Marshal(connectorData)

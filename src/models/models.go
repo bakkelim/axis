@@ -34,7 +34,7 @@ const (
 type FilterCondition struct {
 	Field    string         `json:"field"`    // Column name to filter on
 	Operator FilterOperator `json:"operator"` // Filter operation to apply
-	Value    interface{}    `json:"value"`    // Value to compare against
+	Value    any            `json:"value"`    // Value to compare against
 }
 
 // PaginationOptions represents pagination parameters
@@ -74,9 +74,9 @@ type AnonymizationRule struct {
 
 // ResponseTemplate represents the template structure for API responses
 type ResponseTemplate struct {
-	ID            string                 `json:"id"`
-	Template      map[string]interface{} `json:"template"`
-	Anonymization []AnonymizationRule    `json:"anonymization,omitempty"`
+	ID            string              `json:"id"`
+	Template      map[string]any      `json:"template"`
+	Anonymization []AnonymizationRule `json:"anonymization,omitempty"`
 }
 
 // Contract represents the main contract structure

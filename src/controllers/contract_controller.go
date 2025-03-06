@@ -196,17 +196,17 @@ func ExecuteContract(c *gin.Context) {
 	defer rows.Close()
 
 	// Generate the response template
-	var results []map[string]interface{}
+	var results []map[string]any
 	columns, _ := rows.Columns()
 
 	for rows.Next() {
 		// Create a map for this row's data
-		rowData := make(map[string]interface{})
+		rowData := make(map[string]any)
 
 		// Create properly typed containers for the scan
-		scanArgs := make([]interface{}, len(columns))
+		scanArgs := make([]any, len(columns))
 		for i := range columns {
-			scanArgs[i] = new(interface{})
+			scanArgs[i] = new(any)
 		}
 
 		if err := rows.Scan(scanArgs...); err != nil {
@@ -216,7 +216,7 @@ func ExecuteContract(c *gin.Context) {
 
 		// Copy the results into the row map
 		for i, col := range columns {
-			val := *(scanArgs[i].(*interface{}))
+			val := *(scanArgs[i].(*any))
 			// Convert []byte to string for MySQL text-based columns
 			if b, ok := val.([]byte); ok {
 				rowData[col] = string(b)
@@ -229,9 +229,9 @@ func ExecuteContract(c *gin.Context) {
 	}
 
 	// parse result into template
-	parsedResults := make([]map[string]interface{}, 0)
+	parsedResults := make([]map[string]any, 0)
 	for _, result := range results {
-		templateStr := make(map[string]interface{})
+		templateStr := make(map[string]any)
 		for key, value := range contract.ResponseTemplate.Template {
 			if tmpl, ok := value.(string); ok {
 				// Create a new template
@@ -326,13 +326,13 @@ func buildConnectionString(config models.DatabaseConfig, connectorType string) s
 	}
 }
 
-func buildWhereClause(filters []models.FilterCondition, dbType string) (string, []interface{}) {
+func buildWhereClause(filters []models.FilterCondition, dbType string) (string, []any) {
 	if len(filters) == 0 {
 		return "", nil
 	}
 
 	var conditions []string
-	var values []interface{}
+	var values []any
 	paramCount := 1
 
 	// Get the correct placeholder based on database type
@@ -366,7 +366,7 @@ func buildWhereClause(filters []models.FilterCondition, dbType string) (string, 
 			values = append(values, filter.Value)
 			paramCount++
 		case models.OperatorIn:
-			if inValues, ok := filter.Value.([]interface{}); ok {
+			if inValues, ok := filter.Value.([]any); ok {
 				placeholders := make([]string, len(inValues))
 				for i := range inValues {
 					placeholders[i] = placeholder(paramCount + i)

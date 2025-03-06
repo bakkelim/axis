@@ -235,7 +235,7 @@ func TestExecuteContract_WithAnonymization(t *testing.T) {
 			SQLQuery:    "SELECT id, email, ssn FROM users",
 		},
 		ResponseTemplate: models.ResponseTemplate{
-			Template: map[string]interface{}{
+			Template: map[string]any{
 				"user_id": "{{.id}}",
 				"email":   "{{.email}}",
 				"ssn":     "{{.ssn}}",
@@ -267,7 +267,7 @@ func TestExecuteContract_WithAnonymization(t *testing.T) {
 	ExecuteContract(c)
 
 	// Verify response structure
-	var response map[string]interface{}
+	var response map[string]any
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	if err != nil {
 		t.Fatalf("Failed to parse response: %v", err)
@@ -279,14 +279,14 @@ func TestExecuteContract_WithAnonymization(t *testing.T) {
 	assert.Equal(t, "success", response["status"])
 
 	// Helper functions for test setup
-	results, ok := response["results"].([]interface{})
+	results, ok := response["results"].([]any)
 	if !ok {
 		t.Fatal("Results should be an array")
 	}
 
 	// Verify anonymization in results
 	if len(results) > 0 {
-		result := results[0].(map[string]interface{})
+		result := results[0].(map[string]any)
 
 		// Check that email is hashed (64 characters hex string)
 		if email, ok := result["email"].(string); ok {
@@ -342,7 +342,7 @@ func TestBuildWhereClause(t *testing.T) {
 		name           string
 		filters        []models.FilterCondition
 		expectedWhere  string
-		expectedValues []interface{}
+		expectedValues []any
 	}{
 		{
 			name:           "No filters",
@@ -360,7 +360,7 @@ func TestBuildWhereClause(t *testing.T) {
 				},
 			},
 			expectedWhere:  " WHERE name = $1",
-			expectedValues: []interface{}{"John"},
+			expectedValues: []any{"John"},
 		},
 		{
 			name: "Multiple filters",
@@ -377,7 +377,7 @@ func TestBuildWhereClause(t *testing.T) {
 				},
 			},
 			expectedWhere:  " WHERE age > $1 AND active = $2",
-			expectedValues: []interface{}{18, true},
+			expectedValues: []any{18, true},
 		},
 		{
 			name: "LIKE operator",
@@ -389,7 +389,7 @@ func TestBuildWhereClause(t *testing.T) {
 				},
 			},
 			expectedWhere:  " WHERE email LIKE $1",
-			expectedValues: []interface{}{"%@example.com"},
+			expectedValues: []any{"%@example.com"},
 		},
 		{
 			name: "IN operator",
@@ -397,11 +397,11 @@ func TestBuildWhereClause(t *testing.T) {
 				{
 					Field:    "status",
 					Operator: models.OperatorIn,
-					Value:    []interface{}{"active", "pending"},
+					Value:    []any{"active", "pending"},
 				},
 			},
 			expectedWhere:  " WHERE status IN ($1,$2)",
-			expectedValues: []interface{}{"active", "pending"},
+			expectedValues: []any{"active", "pending"},
 		},
 		{
 			name: "Complex mixed filters",
@@ -419,17 +419,17 @@ func TestBuildWhereClause(t *testing.T) {
 				{
 					Field:    "status",
 					Operator: models.OperatorIn,
-					Value:    []interface{}{"active", "pending"},
+					Value:    []any{"active", "pending"},
 				},
 			},
 			expectedWhere:  " WHERE age > $1 AND name LIKE $2 AND status IN ($3,$4)",
-			expectedValues: []interface{}{18, "John%", "active", "pending"},
+			expectedValues: []any{18, "John%", "active", "pending"},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			where, values := buildWhereClause(tt.filters)
+			where, values := buildWhereClause(tt.filters, "postgres")
 			assert.Equal(t, tt.expectedWhere, where)
 			assert.Equal(t, tt.expectedValues, values)
 		})
@@ -445,9 +445,9 @@ func TestBuildWhereClause_InvalidIN(t *testing.T) {
 		},
 	}
 
-	where, values := buildWhereClause(filters)
+	where, values := buildWhereClause(filters, "postgres")
 	assert.Equal(t, " WHERE ", where)
-	assert.Equal(t, []interface{}{"not-an-array"}, values)
+	assert.Equal(t, []any{"not-an-array"}, values)
 }
 
 func TestBuildOrderByClause(t *testing.T) {
@@ -533,7 +533,7 @@ func TestExecuteContract_WithSorting(t *testing.T) {
 			},
 		},
 		ResponseTemplate: models.ResponseTemplate{
-			Template: map[string]interface{}{
+			Template: map[string]any{
 				"user_id": "{{.id}}",
 				"name":    "{{.name}}",
 				"age":     "{{.age}}",
@@ -554,7 +554,7 @@ func TestExecuteContract_WithSorting(t *testing.T) {
 	ExecuteContract(c)
 
 	// Verify response structure
-	var response map[string]interface{}
+	var response map[string]any
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	if err != nil {
 		t.Fatalf("Failed to parse response: %v", err)
@@ -566,14 +566,14 @@ func TestExecuteContract_WithSorting(t *testing.T) {
 	assert.Equal(t, "success", response["status"])
 
 	// Helper functions for test setup
-	results, ok := response["results"].([]interface{})
+	results, ok := response["results"].([]any)
 	if !ok {
 		t.Fatal("Results should be an array")
 	}
 
 	// Verify sorting in results
 	if len(results) > 0 {
-		result := results[0].(map[string]interface{})
+		result := results[0].(map[string]any)
 
 		// Check that age is sorted in descending order
 		if age, ok := result["age"].(float64); ok {
