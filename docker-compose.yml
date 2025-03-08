@@ -4,22 +4,35 @@ services:
     ports:
       - "8080:8080"
     depends_on:
-      - db
+      - world-db
+      - sakila-db
+      - playground-db
     environment:
       - GIN_MODE=release
     volumes:
       - ./data-contracts:/data-contracts
       - ./connectors:/connectors
 
-  db:
+  world-db:
     image: ghusta/postgres-world-db:2.12
     ports:
       - "5432:5432"
 
-  db2:
+  sakila-db:
     image: sakiladb/mysql:8
     ports:
       - "3306:3306"
+
+  playground-db:
+    build:
+      context: ../sat-playground-db
+      dockerfile: Dockerfile
+    ports:
+      - "5433:5432"
+    environment:
+      POSTGRES_DB: demodb
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: admin_password
 
   axis-ui:
     build:
