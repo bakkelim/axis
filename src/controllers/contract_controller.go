@@ -346,23 +346,23 @@ func buildWhereClause(filters []models.FilterCondition, dbType string) (string, 
 	for _, filter := range filters {
 		switch filter.Operator {
 		case models.OperatorEquals:
-			conditions = append(conditions, fmt.Sprintf("co.%s = %s", filter.Field, placeholder(paramCount)))
+			conditions = append(conditions, fmt.Sprintf("%s = %s", filter.Field, placeholder(paramCount)))
 			values = append(values, filter.Value)
 			paramCount++
 		case models.OperatorNotEquals:
-			conditions = append(conditions, fmt.Sprintf("co.%s != %s", filter.Field, placeholder(paramCount)))
+			conditions = append(conditions, fmt.Sprintf("%s != %s", filter.Field, placeholder(paramCount)))
 			values = append(values, filter.Value)
 			paramCount++
 		case models.OperatorGreater:
-			conditions = append(conditions, fmt.Sprintf("co.%s > %s", filter.Field, placeholder(paramCount)))
+			conditions = append(conditions, fmt.Sprintf("%s > %s", filter.Field, placeholder(paramCount)))
 			values = append(values, filter.Value)
 			paramCount++
 		case models.OperatorLess:
-			conditions = append(conditions, fmt.Sprintf("co.%s < %s", filter.Field, placeholder(paramCount)))
+			conditions = append(conditions, fmt.Sprintf("%s < %s", filter.Field, placeholder(paramCount)))
 			values = append(values, filter.Value)
 			paramCount++
 		case models.OperatorLike:
-			conditions = append(conditions, fmt.Sprintf("co.%s LIKE %s", filter.Field, placeholder(paramCount)))
+			conditions = append(conditions, fmt.Sprintf("%s LIKE %s", filter.Field, placeholder(paramCount)))
 			values = append(values, filter.Value)
 			paramCount++
 		case models.OperatorIn:
@@ -372,7 +372,7 @@ func buildWhereClause(filters []models.FilterCondition, dbType string) (string, 
 					placeholders[i] = placeholder(paramCount + i)
 					values = append(values, inValues[i])
 				}
-				conditions = append(conditions, fmt.Sprintf("co.%s IN (%s)",
+				conditions = append(conditions, fmt.Sprintf("%s IN (%s)",
 					filter.Field, strings.Join(placeholders, ",")))
 				paramCount += len(inValues)
 			}
